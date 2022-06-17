@@ -2,7 +2,6 @@
 # by Alberto Tonda, 2018 <alberto.tonda@gmail.com>
 
 import sys
-from typing import List
 import inspyred 
 import random
 import matplotlib.pyplot as plt
@@ -10,7 +9,30 @@ import matplotlib.patches as patches
 from matplotlib.patches import Circle
 import numpy as np
 
+import descartes
+import shapely.geometry as sg
+
 RADIUS = 5
+
+def exempleIntersectionPlusieursFormes()
+    a = sg.Point(-.5,0).buffer(1.)
+    b = sg.Point(0.5,0).buffer(1.)
+
+    left = a.difference(b)
+    right = b.difference(a)
+    middle = a.intersection(b)
+
+    ax = plt.gca()
+    ax.add_patch(point)
+    ax.add_patch(descartes.PolygonPatch(left, fc='b', ec='k', alpha=0.2))
+    ax.add_patch(descartes.PolygonPatch(right, fc='r', ec='k', alpha=0.2))
+    ax.add_patch(descartes.PolygonPatch(middle, fc='g', ec='k', alpha=0.2))
+
+    ax.set_xlim(-2,2)
+    ax.set_ylim(-2,2)
+    ax.set_aspect('equal')
+    plt.show()
+
 
 '''This function accepts in input a list of strings, and tries to parse them to update the position of a robot. Then returns distance from objective.'''
 def fitnessRobot(listOfCommands, visualize=False) :
