@@ -12,26 +12,92 @@ import numpy as np
 import descartes
 import shapely.geometry as sg
 
+from enum import Enum
+
+## CONSTANTS
+
 RADIUS = 5
 
-def exempleIntersectionPlusieursFormes()
-    a = sg.Point(-.5,0).buffer(1.)
-    b = sg.Point(0.5,0).buffer(1.)
+WALLS = []
 
-    left = a.difference(b)
-    right = b.difference(a)
-    middle = a.intersection(b)
+wall1 = sg.Polygon([30,0],[40,0],[30,80],[40,80])
+wall2 = sg.Polygon([70,20],[80,20],[70,100],[80,100])
 
-    ax = plt.gca()
-    ax.add_patch(descartes.PolygonPatch(left, fc='b', ec='k', alpha=0.2))
-    ax.add_patch(descartes.PolygonPatch(right, fc='r', ec='k', alpha=0.2))
-    ax.add_patch(descartes.PolygonPatch(middle, fc='g', ec='k', alpha=0.2))
+WALLS.append(wall1)
+WALLS.append(wall2)
 
-    ax.set_xlim(-2,2)
-    ax.set_ylim(-2,2)
-    ax.set_aspect('equal')
-    plt.show()
+OBJECTIVE = sg.Point(90,90)
 
+INITIAL_POSITION = sg.Point(10,10)
+
+INITIAL_ANGLE = 90
+
+
+class MoveType(Enum):
+    FORWARD = 1
+    ROTATE = 2
+
+
+## Matthieu
+class Instruction():
+    def __init__(self,moveType:MoveType,amplitude:float):
+        if moveType == MoveType.ROTATE:
+            amplitude %= amplitude
+        self.amplitude = amplitude
+        self.moveType = moveType
+    
+    def applyInstruction(self,point:sg.Point,orientation:float):
+        if self.moveType == MoveType.ROTATE:
+            orientation += self.amplitude
+            return (point,orientation+self.amplitude)
+        elif self.moveType == MoveType.FORWARD:
+            a = point.x+np.cos(np.radians(orientation))*self.amplitude 
+            b = point.y+np.sin(np.radians(orientation))*self.amplitude
+            return (sg.Point(a,b),orientation)
+
+    def applyInstructions(instructions, initialPoint:sg.Point, initialAngle:float):
+        pointList=[initialPoint]
+        angleList=[angleList]
+        for instruction in instructions:
+            (newPoint,newAngle)=instruction.applyInstruction(pointList[-1],angleList[-1])
+            pointList.append(newPoint)
+            angleList.append(newAngle)
+        return (pointList,angleList)
+##
+
+def heuristic_1(lastPos:sg.Point):
+	vision = lastPos.buffer(RADIUS)
+	ligne_droite = sg.LineString(lastPos,OBJECTIVE)
+	champ_vision = vision.area
+	obstruction = 0
+	for w in WALLS :
+		obstruction += (vision.intersection(w)).area
+	coeff = obstruction / champ_vision
+	return (1+coeff)*ligne_droite.length
+
+def evaluator_1(candidates,args):
+    out = []
+    for candidate in candidates:
+        states= Instruction.applyInstructions(candidate,INITIAL_POSITION,INITIAL_ANGLE)
+        out.append(heuristic_1(states[0][-1]))
+	return out
+
+def generator(random,args):
+    number_of_dimensions = args["number_of_dimensions"]
+    max_number_of_moves = args["max_number_of_moves"]
+    max_amplitude = args["max_amplitude"]
+    actual_number_of_moves = random.uniform(0,max_number_of_moves)
+    out = []
+    for x in range(number_of_dimensions):
+        individual = []
+        for y in range(0,max_number_of_moves):
+            moveType = random.choice([MoveType.FORWARD,MoveType.ROTATE])
+            amplitude = random.uniform(max_amplitude)
+            if moveType == MoveType.ROTATE:
+                amplitude %= 360
+            individual.append((moveType,amplitude))
+        out.append(individual)
+    return out
 
 '''This function accepts in input a list of strings, and tries to parse them to update the position of a robot. Then returns distance from objective.'''
 def fitnessRobot(listOfCommands, visualize=False) :
@@ -40,24 +106,15 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	arenaLength = 100
 	arenaWidth = 100
 	
-	# let's also put a couple of walls in the arena; walls are described by a set of 4 (x,y) corners (bottom-left, top-left, top-right, bottom-right)
-	walls = []
-
-	wall1 = sg.Polygon([30,0],[40,0],[30,80],[40,80])
-	wall1 = sg.Polygon([70,20],[80,20],[70,100],[80,100])
-
-	walls.append(wall1)
-	walls.append(wall2)
-	
 	# initial position and orientation of the robot
-	startX = robotX = 10
-	startY = robotY = 10
-	startDegrees = 90 # 90°
+	startX = robotX = INITIAL_POSITION.x
+	startY = robotY = INITIAL_POSITION.y
+	startDegrees = INITIAL_ANGLE # 90°
 	
 	# position of the objective
-	objectiveX = 90
-	objectiveY = 90
-	
+	objectiveX = OBJECTIVE.x
+	objectiveY = OBJECTIVE.y
+
 	# this is a list of points that the robot will visit; used later to visualize its path
 	positions = []
 	positions.append( [robotX, robotY] )
@@ -74,7 +131,7 @@ def fitnessRobot(listOfCommands, visualize=False) :
 		#Vérification que l'intersection de la trajectoire et les murs est nulle
 		traj = sg.LineString(positions[-1],new_position)
 		collide = False
-		for w in walls :
+		for w in WALLS :
 			if traj.intersection(w) != None :
 				collide = True
 			if collide :
@@ -93,7 +150,7 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	ligne_droite = sg.LineString(last_pos,[objectiveX,objectiveY])
 	champ_vision = vision.area
 	obstruction = 0
-	for w in walls :
+	for w in WALLS :
 		obstruction += (vision.intersection(w)).area
 	coeff = obstruction / champ_vision
 	distanceFromObjective = (1+coeff)*ligne_droite.length
@@ -138,18 +195,18 @@ def main() :
 	evo.remplacer = inspyred.ec.remplacers.plus_remplacement
 	evo.terminator = inspyred.ec.terminators.evaluation_termination
 	
-	listOfCommands = evo.evolve(
-		generator = ,#TODO : Code it
-		evaluator =  ,# TODO : code it,
-		pop_size = 50,
-		num_selected = 2000,
-		maximize = False,
-		max_evaluations = 10000,
-		number_of_dimensions = 10, 
-		minimum = -1,
-		maximum = 1
+	# listOfCommands = evo.evolve(
+	# 	generator = ,#TODO : Code it
+	# 	evaluator =  ,# TODO : code it,
+	# 	pop_size = 50,
+	# 	num_selected = 2000,
+	# 	maximize = False,
+	# 	max_evaluations = 10000,
+	# 	number_of_dimensions = 10, 
+	# 	minimum = -1,
+	# 	maximum = 1
 
-	)
+	# )
 	
 	
 	fitnessRobot(listOfCommands, visualize=True)
