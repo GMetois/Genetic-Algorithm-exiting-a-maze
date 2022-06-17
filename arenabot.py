@@ -2,8 +2,15 @@
 # by Alberto Tonda, 2018 <alberto.tonda@gmail.com>
 
 import sys
+from typing import List
 import inspyred 
 import random
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.patches import Circle
+import numpy as np
+
+RADIUS = 5
 
 '''This function accepts in input a list of strings, and tries to parse them to update the position of a robot. Then returns distance from objective.'''
 def fitnessRobot(listOfCommands, visualize=False) :
@@ -44,14 +51,23 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	positions.append( [robotX, robotY] )
 	
 	# TODO move robot, check that the robot stays inside the arena and stop movement if a wall is hit
+	
+	Degrees = startDegrees
+	for (a,b) in listOfCommands :
+		Degrees += a
+		positions.append( [positions[-1][0] + np.cos(Degrees)*b, positions[-1][1] + np.sin(Degrees)*a] )
+
 	# TODO measure distance from objective
+	
+	last_pos = positions[-1]
+	vision = Circle(last_pos[0],last_pos[1],RADIUS)
+	champ_vision = 0
+	
 	distanceFromObjective = 0
 	
 	# this is optional, argument "visualize" has to be explicitly set to "True" when function is called
 	if visualize :
 		
-		import matplotlib.pyplot as plt
-		import matplotlib.patches as patches
 		figure = plt.figure()
 		ax = figure.add_subplot(111)
 		
