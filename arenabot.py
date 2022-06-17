@@ -86,9 +86,21 @@ def main() :
 	
 	evo.selector = inspyred.ec.selectors.tournament_selection
 	evo.variator = [inspyred.ec.variators.n_point_crossover,inspyred.ec.variators.scramble_mutation]
+	evo.remplacer = inspyred.ec.remplacers.plus_remplacement
+	evo.terminator = inspyred.ec.terminators.evaluation_termination
 	
-	
-	
+	listOfCommands = evo.evolve(
+		generator = ,#TODO : Code it
+		evaluator =  ,# TODO : code it,
+		pop_size = 50,
+		num_selected = 2000,
+		maximize = False,
+		max_evaluations = 10000,
+		number_of_dimensions = 10, 
+		minimum = -1,
+		maximum = 1
+
+	)
 	
 	
 	fitnessRobot(listOfCommands, visualize=True)
