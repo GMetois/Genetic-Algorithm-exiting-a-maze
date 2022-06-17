@@ -23,7 +23,6 @@ def exempleIntersectionPlusieursFormes()
     middle = a.intersection(b)
 
     ax = plt.gca()
-    ax.add_patch(point)
     ax.add_patch(descartes.PolygonPatch(left, fc='b', ec='k', alpha=0.2))
     ax.add_patch(descartes.PolygonPatch(right, fc='r', ec='k', alpha=0.2))
     ax.add_patch(descartes.PolygonPatch(middle, fc='g', ec='k', alpha=0.2))
@@ -44,17 +43,8 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	# let's also put a couple of walls in the arena; walls are described by a set of 4 (x,y) corners (bottom-left, top-left, top-right, bottom-right)
 	walls = []
 
-	wall1 = dict()
-	wall1["x"] = 30
-	wall1["y"] = 0
-	wall1["width"] = 10
-	wall1["height"] = 80
-
-	wall2 = dict()
-	wall2["x"] = 70
-	wall2["y"] = 20
-	wall2["width"] = 10
-	wall2["height"] = 80
+	wall1 = sg.Polygon([30,0],[40,0],[30,80],[40,80])
+	wall1 = sg.Polygon([70,20],[80,20],[70,100],[80,100])
 
 	walls.append(wall1)
 	walls.append(wall2)
@@ -76,14 +66,34 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	
 	Degrees = startDegrees
 	for (a,b) in listOfCommands :
+		
+		#Calcul de la nouvelle position à partir de la commande
 		Degrees += a
-		positions.append( [positions[-1][0] + np.cos(Degrees)*b, positions[-1][1] + np.sin(Degrees)*a] )
+		new_position = [positions[-1][0] + np.cos(Degrees)*b, positions[-1][1] + np.sin(Degrees)*a]
+		
+		#Vérification que l'intersection de la trajectoire et les murs est nulle
+		traj = sg.linestring(positions[-1],new_position)
+		collide = False
+		for w in walls :
+			if traj.intersection(w) != None :
+				collide = True
+			if collide :
+				break
+		#Si elle est nulle, on ajoute la position à la liste.
+			if not collide :
+				positions.append(new_position)
+		if collide :
+			break
+		
 
 	# TODO measure distance from objective
 	
 	last_pos = positions[-1]
-	vision = Circle(last_pos[0],last_pos[1],RADIUS)
-	champ_vision = 0
+	vision = sg.Point(last_pos[0],last_pos[1]).buffer(RADIUS)
+	champ_vision = vision.area
+	obstruction = 0
+	for w in walls :
+		obstruction += (vision.intersection(w)).area
 	
 	distanceFromObjective = 0
 	
