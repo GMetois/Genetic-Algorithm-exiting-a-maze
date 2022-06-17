@@ -76,10 +76,10 @@ def heuristic_1(lastPos:sg.Point):
 	return (1+coeff)*ligne_droite.length
 
 def evaluator_1(candidates,args):
-    out = []
-    for candidate in candidates:
-        states= Instruction.applyInstructions(candidate,INITIAL_POSITION,INITIAL_ANGLE)
-        out.append(heuristic_1(states[0][-1]))
+	out = []
+	for candidate in candidates:
+		states= Instruction.applyInstructions(candidate,INITIAL_POSITION,INITIAL_ANGLE)
+		out.append(heuristic_1(states[0][-1]))
 	return out
 
 def generator(random,args):
