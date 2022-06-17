@@ -69,10 +69,10 @@ def fitnessRobot(listOfCommands, visualize=False) :
 		
 		#Calcul de la nouvelle position à partir de la commande
 		Degrees += a
-		new_position = [positions[-1][0] + np.cos(Degrees)*b, positions[-1][1] + np.sin(Degrees)*a]
+		new_position = [positions[-1][0] + np.cos(np.radians(Degrees))*b, positions[-1][1] + np.sin(np.radians(Degrees))*a]
 		
 		#Vérification que l'intersection de la trajectoire et les murs est nulle
-		traj = sg.linestring(positions[-1],new_position)
+		traj = sg.LineString(positions[-1],new_position)
 		collide = False
 		for w in walls :
 			if traj.intersection(w) != None :
@@ -90,12 +90,13 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	
 	last_pos = positions[-1]
 	vision = sg.Point(last_pos[0],last_pos[1]).buffer(RADIUS)
+	ligne_droite = sg.LineString(last_pos,[objectiveX,objectiveY])
 	champ_vision = vision.area
 	obstruction = 0
 	for w in walls :
 		obstruction += (vision.intersection(w)).area
-	
-	distanceFromObjective = 0
+	coeff = obstruction / champ_vision
+	distanceFromObjective = (1+coeff)*ligne_droite.length
 	
 	# this is optional, argument "visualize" has to be explicitly set to "True" when function is called
 	if visualize :
