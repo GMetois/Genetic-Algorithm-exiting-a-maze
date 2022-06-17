@@ -42,7 +42,7 @@ class MoveType(Enum):
 class Instruction():
     def __init__(self,moveType:MoveType,amplitude:float):
         if moveType == MoveType.ROTATE:
-            amplitude %= amplitude
+            amplitude %= 360
         self.amplitude = amplitude
         self.moveType = moveType
     
@@ -90,12 +90,10 @@ def generator(random,args):
     out = []
     for x in range(number_of_dimensions):
         individual = []
-        for y in range(0,max_number_of_moves):
+        for y in range(actual_number_of_moves):
             moveType = random.choice([MoveType.FORWARD,MoveType.ROTATE])
             amplitude = random.uniform(max_amplitude)
-            if moveType == MoveType.ROTATE:
-                amplitude %= 360
-            individual.append((moveType,amplitude))
+            individual.append(Instruction(moveType,amplitude))
         out.append(individual)
     return out
 
@@ -106,54 +104,48 @@ def fitnessRobot(listOfCommands, visualize=False) :
 	arenaLength = 100
 	arenaWidth = 100
 	
-	# initial position and orientation of the robot
-	startX = robotX = INITIAL_POSITION.x
-	startY = robotY = INITIAL_POSITION.y
-	startDegrees = INITIAL_ANGLE # 90°
-	
-	# position of the objective
-	objectiveX = OBJECTIVE.x
-	objectiveY = OBJECTIVE.y
 
 	# this is a list of points that the robot will visit; used later to visualize its path
-	positions = []
-	positions.append( [robotX, robotY] )
-	
+	positions = [INITIAL_POSITION]
+	angles = [INITIAL_ANGLE]
+
 	# TODO move robot, check that the robot stays inside the arena and stop movement if a wall is hit
-	
-	Degrees = startDegrees
-	for (a,b) in listOfCommands :
+
+	# for (a,b) in listOfCommands :
 		
+	# 	#Calcul de la nouvelle position à partir de la commande
+	# 	Degrees += a
+	# 	new_position = [positions[-1][0] + np.cos(np.radians(Degrees))*b, positions[-1][1] + np.sin(np.radians(Degrees))*a]
+		
+	# 	#Vérification que l'intersection de la trajectoire et les murs est nulle
+	# 	traj = sg.LineString(positions[-1],new_position)
+	# 	collide = False
+	# 	for w in WALLS :
+	# 		if traj.intersection(w) != None :
+	# 			collide = True
+	# 		if collide :
+	# 			break
+	# 	#Si elle est nulle, on ajoute la position à la liste.
+	# 		if not collide :
+	# 			positions.append(new_position)
+	# 	if collide :
+	# 		break
+	for instruction in listOfCommands :
 		#Calcul de la nouvelle position à partir de la commande
-		Degrees += a
-		new_position = [positions[-1][0] + np.cos(np.radians(Degrees))*b, positions[-1][1] + np.sin(np.radians(Degrees))*a]
-		
+		newState= instruction.applyInstruction(positions[-1],angles[-1])
+		positions = newState[0]
+		angles = newState[1]
 		#Vérification que l'intersection de la trajectoire et les murs est nulle
-		traj = sg.LineString(positions[-1],new_position)
+		traj = sg.LineString(positions[-1],positions[-2])
 		collide = False
 		for w in WALLS :
 			if traj.intersection(w) != None :
 				collide = True
-			if collide :
 				break
-		#Si elle est nulle, on ajoute la position à la liste.
-			if not collide :
-				positions.append(new_position)
+	 	#Si elle est nulle, on ajoute la position à la liste.
 		if collide :
 			break
-		
-
-	# TODO measure distance from objective
-	
-	last_pos = positions[-1]
-	vision = sg.Point(last_pos[0],last_pos[1]).buffer(RADIUS)
-	ligne_droite = sg.LineString(last_pos,[objectiveX,objectiveY])
-	champ_vision = vision.area
-	obstruction = 0
-	for w in WALLS :
-		obstruction += (vision.intersection(w)).area
-	coeff = obstruction / champ_vision
-	distanceFromObjective = (1+coeff)*ligne_droite.length
+	distanceFromObjective = heuristic_1(positions[-1])
 	
 	# this is optional, argument "visualize" has to be explicitly set to "True" when function is called
 	if visualize :
@@ -162,11 +154,11 @@ def fitnessRobot(listOfCommands, visualize=False) :
 		ax = figure.add_subplot(111)
 		
 		# plot initial position and objective
-		ax.plot(startX, startY, 'r^', label="Initial position of the robot")
-		ax.plot(objectiveX, objectiveY, 'gx', label="Position of the objective")
+		ax.plot(INITIAL_POSITION.x, INITIAL_POSITION.y, 'r^', label="Initial position of the robot")
+		ax.plot(OBJECTIVE.x, OBJECTIVE.y, 'gx', label="Position of the objective")
 		
 		# plot the walls
-		for wall in walls :
+		for wall in WALLS :
 			ax.add_patch(patches.Rectangle( (wall["x"], wall["y"]), wall["width"], wall["height"] ))
 		
 		# plot a series of lines describing the movement of the robot in the arena
