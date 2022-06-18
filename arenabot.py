@@ -1,7 +1,5 @@
 # Simple script that simulates a bot moving inside an Arena, following a series of commands
 # by Alberto Tonda, 2018 <alberto.tonda@gmail.com>
-
-from shutil import move
 import sys
 import inspyred 
 import random
@@ -15,8 +13,7 @@ import shapely.geometry as sg
 
 from enum import Enum
 
-## CONSTANTS
-
+## CONSTANTES
 RADIUS = 5
 
 WALLS = []
@@ -59,22 +56,28 @@ class Instruction():
 	def applyInstructionsUntilHit(instructions,initialPoint:sg.Point,initialAngle:float):
 		positions = [initialPoint]
 		angles = [initialAngle]
-		for instruction in instructions :
-			#Calcul de la nouvelle position à partir de la commande
-			newState= instruction.applyInstruction(positions[-1],angles[-1])
-			positions.append(newState[0])
-			angles.append(newState[1])
-			#Vérification que l'intersection de la trajectoire et les murs est nulle
-			traj = sg.LineString([positions[-1],positions[-2]])
-			collide = not(traj.intersection(ARENA_LIMITS))
-			for w in WALLS :
-				if not (traj.intersection(w).is_empty) or collide:
-					collide = True
-					break
+		i = 0
+		collide = False
+		while i < len(instructions) and not(collide):
+			# Calcul de la nouvelle position à partir de la commande
+			newState=instructions[i].applyInstruction(positions[-1],angles[-1])
 			
-			#Si elle est nulle, on ajoute la position à la liste.
-			if collide :
-				break
+			traj = sg.LineString([newState[0],positions[-1]])
+
+			# Vérification de l'intersection entre les limites de l'arène et la trajectoire
+			collide = not(traj.intersection(ARENA_LIMITS).is_empty)
+			k = 0
+			
+			# Vérification que l'intersection de la trajectoire et les murs est nulle
+			while k < len(WALLS) and not(collide):
+				collide = not(traj.intersection(WALLS[k]).is_empty)
+				k+=1
+			
+			# Si pas de collision, on ajoute la position à la liste.
+			if not(collide):
+				positions.append(newState[0])
+				angles.append(newState[1])
+			i+=1
 		return (positions, angles)
 
 	''' Représentation sous forme de chaine de caractère d'une instruction : F100 ou R90 (avance de 100 ou tourne de 90). Peut être appelé par str(Instruction(MoveType.ROTATE,10))'''
@@ -90,7 +93,6 @@ class Instruction():
 		return str(self)
 
 ## Heuristiques et évaluateurs pour inspyred
-
 def heuristic_1(lastPos:sg.Point):
 	vision = lastPos.buffer(RADIUS)
 	ligne_droite = sg.LineString([lastPos,OBJECTIVE])
@@ -99,7 +101,7 @@ def heuristic_1(lastPos:sg.Point):
 	for w in WALLS :
 		obstruction += (vision.intersection(w)).area
 	coeff = obstruction / champ_vision
-	return (1+coeff)*ligne_droite
+	return (1+coeff)*ligne_droite.length
 
 def evaluator_1(candidates,args):
 	out = []
@@ -133,25 +135,14 @@ def generator(random,args):
 				moveType = MoveType.FORWARD
 		
 		if moveType == MoveType.FORWARD:
-			amplitude = random.randint(0,args["max_deplacement_amplitude"])
+			amplitude = random.randint(1,args["max_deplacement_amplitude"])
 		elif moveType == MoveType.ROTATE:
 			amplitude = random.randint(0,args["max_rotation_amplitude"])*random.choice([-1,1])
 		
 		individual.append(Instruction(moveType,amplitude))
 	return individual
 
-'''This function accepts in input a list of strings, and tries to parse them to update the position of a robot. Then returns distance from objective.'''
-def fitnessRobot(listOfCommands, visualize=False) :
-	# this is a list of points that the robot will visit; used later to visualize its path
-	positions,angles = Instruction.applyInstructionsUntilHit(listOfCommands,INITIAL_POSITION,INITIAL_ANGLE)
-	distanceFromObjective = heuristic_2(positions[-1])
-	
-	# this is optional, argument "visualize" has to be explicitly set to "True" when function is called
-	if visualize :
-		display(listOfCommands)
-
-	return distanceFromObjective
-
+## Affichage des résultats
 def display(instructions): 
 	figure = plt.figure()
 	ax = figure.add_subplot(111)
@@ -168,10 +159,10 @@ def display(instructions):
 	# plot a series of lines describing the movement of the robot in the arena
 
 	#Plot de la trajectoire sans collision	
-	pointsWithoutColision = Instruction.applyInstructions(instructions,INITIAL_POSITION,INITIAL_ANGLE)[0]
-	lineWithoutColision=sg.LineString(pointsWithoutColision)
-	colisionFreeX,colisionFreeY = lineWithoutColision.xy
-	ax.plot(colisionFreeX,colisionFreeY, 'r--', label="Robot path without colision" )
+	pointsWithoutCollision = Instruction.applyInstructions(instructions,INITIAL_POSITION,INITIAL_ANGLE)[0]
+	lineWithoutCollision=sg.LineString(pointsWithoutCollision)
+	collisionFreeX,collisionFreeY = lineWithoutCollision.xy
+	ax.plot(collisionFreeX,collisionFreeY, 'r--', label="Robot path without collision" )
 
 	#Plot de la véritable trajectoire (avec collision)
 	positions = Instruction.applyInstructionsUntilHit(instructions,INITIAL_POSITION,INITIAL_ANGLE)[0]
@@ -189,13 +180,14 @@ def display(instructions):
 
 ################# MAIN
 def main() :
-	
-	# first, let's see what happens with an empty list of commands
-	# listOfCommands = [Instruction(MoveType.FORWARD,90),Instruction(MoveType.ROTATE,-90),Instruction(MoveType.FORWARD,40),Instruction(MoveType.ROTATE,-90),Instruction(MoveType.FORWARD,40)]
 	listOfCommands = []
+
+	# Random generator
 	random_generator = random.Random()
 	random_generator.seed(42)
 	
+
+	#Inspyred 
 	evo = inspyred.ec.EvolutionaryComputation(random_generator)
 	
 	evo.selector = inspyred.ec.selectors.tournament_selection
@@ -205,21 +197,22 @@ def main() :
 
 	population = evo.evolve(
 	 	generator = generator,
-	 	evaluator =  evaluator_2,
-	 	pop_size = 10000,
+	 	evaluator =  evaluator_1,
+	 	pop_size = 1000,
 	 	num_selected = 2000,
 	 	maximize = False,
 	 	max_evaluations = 10000,
-		max_rotation_amplitude =120,
-		max_deplacement_amplitude=100,
-		min_number_of_moves = 6,
-		max_number_of_moves = 30
+		max_rotation_amplitude =30,
+		max_deplacement_amplitude=10,
+		min_number_of_moves = 40,
+		max_number_of_moves = 100
 	)    
-	
+
+
+	# Affichage des résultats
 	bestListOfCommands=population[0].candidate
 	print(bestListOfCommands)
 	display(bestListOfCommands)
-	
 	return 0
 
 if __name__ == "__main__" :
