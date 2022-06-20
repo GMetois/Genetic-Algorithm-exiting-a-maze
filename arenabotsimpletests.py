@@ -1,15 +1,12 @@
 # Simple script that simulates a bot moving inside an Arena, following a series of commands
 # by Alberto Tonda, 2018 <alberto.tonda@gmail.com>
-from sre_parse import State
 import sys
 import inspyred 
 import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from matplotlib.patches import Circle
 import numpy as np
 
-import descartes
 import shapely.geometry as sg
 
 from enum import Enum
@@ -158,11 +155,48 @@ def evaluator_2(candidates,args):
 def evaluator_3(candidates,args):
 	out = []
 	for candidate in candidates:
-		positions,angles,positionsWCollisions,anglesWCollisions = Instruction.applyInstructionsBis(candidate,INITIAL_POSITION,INITIAL_ANGLE)
-		#print(len(wCollisions)-len(states))
+		positionsWCollisions,anglesWCollisions,positions,angles = Instruction.applyInstructionsBis(candidate,INITIAL_POSITION,INITIAL_ANGLE)
 		out.append((1+10000*(len(positionsWCollisions)-len(positions)))*sum([heuristic_2(point) for point in positionsWCollisions]))
 	return out
 
+def evaluator_4(candidates,args):
+    out = []
+    for candidate in candidates:
+        positionsWCollisions,anglesWCollisions,positions,angles = Instruction.applyInstructionsBis(candidate,INITIAL_POSITION,INITIAL_ANGLE)
+        totalLine = sg.LineString(positionsWCollisions+[INITIAL_POSITION])
+        lineUntilHit = sg.LineString(positions)
+        totalInt = totalLine.length-lineUntilHit.length
+        minimalDistance = 1200
+        out.append(args["weight_proximity_wall"]*(1-minimalDistance/1200)+args["weight_dist_inter"]*totalInt+args["weight_dist_traj"]*lineUntilHit.length+args["weight_dist_objective"]*sg.LineString([positions[-1],OBJECTIVE]).length+args["weight_out_arena"]*int(not(totalLine.intersects(ARENA_LIMITS))))
+    return out
+
+def evaluator_5(candidates,args):
+	out = []
+	for candidate in candidates:
+		positionsWCollisions,anglesWCollisions,positions,angles = Instruction.applyInstructionsBis(candidate,INITIAL_POSITION,INITIAL_ANGLE)
+		totalLine = sg.LineString(positions)
+		lineUntilHit = sg.LineString([INITIAL_POSITION]+positionsWCollisions)
+		if totalLine.length == 0:
+			out.append(1e12)
+		else:
+			totalInt = args["weight_dist_inter"]*(1-lineUntilHit.length/totalLine.length)
+			dist_traj = args["weight_dist_traj"]*lineUntilHit.length
+			dist_objective = args["weight_dist_objective"]*(sg.LineString([positions[-1],OBJECTIVE]).length)
+			minimalDistance = 1200
+			# print("Eval : ")
+			# print(totalInt)
+			# print(dist_traj)
+			# print(dist_objective)
+			# print(args["weight_out_arena"]*int(totalLine.intersects(ARENA_LIMITS)))
+			# print((1+totalInt+dist_traj+dist_objective+args["weight_out_arena"]*int(totalLine.intersects(ARENA_LIMITS))))
+			# print()
+			#print(totalInt)
+			#out.append((1+args["weight_dist_inter"]*totalInt+args["weight_dist_traj"]*lineUntilHit.length+args["weight_dist_objective"]*(sg.LineString([positions[-1],OBJECTIVE]).length)/totalLine.length+args["weight_out_arena"]*int(totalLine.intersects(ARENA_LIMITS)))*lineUntilHit.length)
+			out.append((1+totalInt+dist_traj+dist_objective+args["weight_out_arena"]*int(totalLine.intersects(ARENA_LIMITS)))*totalLine.length)
+
+
+
+	return out
 
 def generator(random,args):
 	actual_number_of_moves = random.randint(args["min_number_of_moves"],args["max_number_of_moves"])
@@ -188,75 +222,85 @@ def generator_2(random,args):
 	actual_number_of_moves = random.randint(args["min_number_of_moves"],args["max_number_of_moves"])
 	individual = []
 	for y in range(actual_number_of_moves):
-		if individual == []:
-			moveType = random.choice([MoveType.FORWARD,MoveType.ROTATE])
+		if random.random() < 0.50:
+			moveType = MoveType.FORWARD
 		else: 
-			if individual[-1].moveType == MoveType.FORWARD:
-				moveType = MoveType.ROTATE
-			else:
-				moveType = MoveType.FORWARD
+			moveType = MoveType.ROTATE
+		#moveType = random.choice([MoveType.FORWARD,MoveType.FORWARD,MoveType.FORWARD,MoveType.ROTATE])
+		# if individual != []:
+		# 	if individual[-1].moveType == moveType.ROTATE:
+		# 		moveType = MoveType.FORWARD
 		
 		if moveType == MoveType.FORWARD:
-			amplitude = random.randint(1,args["max_deplacement_amplitude"])
+			#amplitude = random.gammavariate(4,2)
+			amplitude =  args["max_deplacement_amplitude"]
 		elif moveType == MoveType.ROTATE:
+			#amplitude = random.gauss(0,args["max_rotation_amplitude"])
 			amplitude = random.gauss(0,args["max_rotation_amplitude"])
-		
 		individual.append(Instruction(moveType,amplitude))
 	return individual
 
 ## Affichage des résultats
 def display(instructions): 
-	figure = plt.figure()
-	ax = figure.add_subplot(111)
-	
-	# plot initial position and objective
-	ax.plot(INITIAL_POSITION.x, INITIAL_POSITION.y, 'r^', label="Initial position of the robot")
-	ax.plot(OBJECTIVE.x, OBJECTIVE.y, 'gx', label="Position of the objective")
-	
-	# plot the walls
-	for wall in WALLS :
+    figure = plt.figure()
+    ax = figure.add_subplot(111)
+    # plot initial position and objective
+    ax.plot(INITIAL_POSITION.x, INITIAL_POSITION.y, 'r^', label="Initial position of the robot")
+    ax.plot(OBJECTIVE.x, OBJECTIVE.y, 'gx', label="Position of the objective")
+    for wall in WALLS :
 		# ax.add_patch(patches.Rectangle( (wall["x"], wall["y"]), wall["width"], wall["height"] ))
-		xs,ys = wall.exterior.xy
-		ax.fill(xs,ys,alpha=0.5,fc='b',ec='none')
+        xs,ys = wall.exterior.xy
+        ax.fill(xs,ys,alpha=0.5,fc='b',ec='none')
 	# plot a series of lines describing the movement of the robot in the arena
-
-	#Plot de la trajectoire sans collision	
-	pointsWithoutCollision = Instruction.applyInstructions(instructions,INITIAL_POSITION,INITIAL_ANGLE)[0]
-	lineWithoutCollision=sg.LineString(pointsWithoutCollision)
-	collisionFreeX,collisionFreeY = lineWithoutCollision.xy
-	ax.plot(collisionFreeX,collisionFreeY, 'r--', label="Robot path without collision" )
+    pointsWithoutCollision,angleWithoutCollision = Instruction.applyInstructions(instructions,INITIAL_POSITION,INITIAL_ANGLE)
+    positions,angles = Instruction.applyInstructionsUntilHit(instructions,INITIAL_POSITION,INITIAL_ANGLE)
+    #Plot de la trajectoire sans collision
+    lineWithoutCollision=sg.LineString(pointsWithoutCollision)
+    collisionFreeX,collisionFreeY = lineWithoutCollision.xy
+    ax.plot(collisionFreeX,collisionFreeY, 'r--', label="Robot path without collision" )
 
 	#Plot de la véritable trajectoire (avec collision)
-	positions = Instruction.applyInstructionsUntilHit(instructions,INITIAL_POSITION,INITIAL_ANGLE)[0]
-	line = sg.LineString(positions)
-	lx,ly = line.xy
-	ax.plot(lx,ly, 'r-', label="Robot path" )
+    line = sg.LineString(positions)
+    lx,ly = line.xy
+    ax.plot(lx,ly, 'r-', label="Robot path" )
 	
-	# Limites de l'arène
-	xLimits,yLimits=ARENA_LIMITS.xy
-	ax.plot(xLimits,yLimits,'b-',label='Arena limits')
-
-	ax.set_title("Movements of the robot inside the arena")
-	ax.legend(loc='best')
-	plt.show()
+	# Limites de l'arène 
+    xLimits,yLimits=ARENA_LIMITS.xy
+    ax.plot(xLimits,yLimits,'b-',label='Arena limits')
+    ax.set_title("Movements of the robot inside the arena")
+    ax.legend(loc='best')
+    plt.show()
 
 ## Mutations
+def changeAmpl(random,candidates,args):
+	out = []
+	for candidate in candidates:
+		out.append(candidate.copy())
+		if random.random() <=args["p_change_move"]: 
+			k = random.randint(0,len(candidate)-1)
+			if candidate[k].moveType == MoveType.ROTATE:
+				out[-1][k].amplitude = random.gauss(0,args["max_rotation_amplitude"])
+			elif candidate[k].moveType == MoveType.FORWARD:
+				out[-1][k].amplitude = args["max_deplacement_amplitude"]
+	return out
+
 def moveTypeMutation(random,candidates,args):
 	out = []
 	for candidate in candidates:
 		out.append(candidate.copy())
-		k = random.randint(0,len(candidate)-1)
-		if candidate[k].moveType == MoveType.ROTATE:
-			out[-1][k].moveType = MoveType.FORWARD
-			out[-1][k].amplitude = abs(candidate[k].amplitude)/180*args["max_deplacement_amplitude"]
-		elif candidate[k].moveType == MoveType.FORWARD:
-			out[-1][k].moveType = MoveType.ROTATE
-			out[-1][k].amplitude = abs(candidate[k].amplitude)/args["max_deplacement_amplitude"]*180*random.choice([-1,1])
+		if random.random() <=args["p_change_move"]: 
+			k = random.randint(0,len(candidate)-1)
+			if candidate[k].moveType == MoveType.ROTATE:
+				out[-1][k].moveType = MoveType.FORWARD
+				out[-1][k].amplitude = abs(candidate[k].amplitude)/180*args["max_deplacement_amplitude"]
+			elif candidate[k].moveType == MoveType.FORWARD:
+				out[-1][k].moveType = MoveType.ROTATE
+				out[-1][k].amplitude = abs(candidate[k].amplitude)/args["max_deplacement_amplitude"]*180*random.choice([-1,1])
 	return out
 ################# MAIN
 def main() :
 	listOfCommands = []
-	#display([])
+
 	# Random generator
 	random_generator = random.Random()
 	random_generator.seed(42)
@@ -269,33 +313,36 @@ def main() :
 	evo.variator = [inspyred.ec.variators.n_point_crossover,moveTypeMutation]
 	evo.replacer = inspyred.ec.replacers.plus_replacement
 	evo.terminator = inspyred.ec.terminators.evaluation_termination
-
+	
 	population = evo.evolve(
 	 	generator = generator_2,
-	 	evaluator =  evaluator_3,
-	 	pop_size = 3000,
+	 	evaluator =  evaluator_5,
+	 	pop_size = 500,
 	 	num_selected = 2000,
 	 	maximize = False,
-		mutation_rate = 0.8,
-	 	max_evaluations = 25000,
+		mutation_rate = 0.9,
+		crossover_rate = 0.2,
+	 	max_evaluations = 40000,
 		max_rotation_amplitude =10,
-		max_deplacement_amplitude=25,
-		min_number_of_moves = 100,
-		max_number_of_moves = 300
-	)    
-
-
-	# Affichage des résultats
-	bestListOfCommands=population[0].candidate
+		max_deplacement_amplitude=5,
+		min_number_of_moves = 150,
+		max_number_of_moves = 150,
+        weight_dist_objective = 1,
+        weight_dist_traj = 0,
+        weight_dist_inter = 100,
+		weight_out_arena = 100,
+		weight_proximity_wall = 0
+	)
+    # Affichage des résultats
+	indiv = population[0]
+	bestListOfCommands=indiv.candidate
 	print(bestListOfCommands)
-	print(evaluator_3([bestListOfCommands],None))
+	print(indiv.fitness)
+	#print(evaluator_4([bestListOfCommands],None))
 	display(bestListOfCommands)
-	states = Instruction.applyInstructionsUntilHit(bestListOfCommands,INITIAL_POSITION,INITIAL_ANGLE)
-	wCollisions = Instruction.applyInstructions(bestListOfCommands,INITIAL_POSITION,INITIAL_ANGLE)
-	print(len(states))
-	print(len(wCollisions))	
 
 	return 0
+
 
 if __name__ == "__main__" :
 	sys.exit( main() )
