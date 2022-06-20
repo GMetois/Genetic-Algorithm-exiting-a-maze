@@ -175,7 +175,7 @@ def evaluator_5(candidates,args):
 	for candidate in candidates:
 		positionsWCollisions,anglesWCollisions,positions,angles = Instruction.applyInstructionsBis(candidate,INITIAL_POSITION,INITIAL_ANGLE)
 		totalLine = sg.LineString(positions)
-		lineUntilHit = sg.LineString([INITIAL_POSITION]+positionsWCollisions)
+		lineUntilHit = sg.LineString([INITIAL_POSITION,INITIAL_POSITION]+positionsWCollisions)
 		if totalLine.length == 0:
 			out.append(1e12)
 		else:
@@ -233,7 +233,7 @@ def generator_2(random,args):
 		
 		if moveType == MoveType.FORWARD:
 			#amplitude = random.gammavariate(4,2)
-			amplitude =  args["max_deplacement_amplitude"]
+			amplitude =  random.gauss(args["mean_forward_amplitude"],args["max_forward_amplitude"])
 		elif moveType == MoveType.ROTATE:
 			#amplitude = random.gauss(0,args["max_rotation_amplitude"])
 			amplitude = random.gauss(0,args["max_rotation_amplitude"])
@@ -276,7 +276,7 @@ def changeAmpl(random,candidates,args):
 	out = []
 	for candidate in candidates:
 		out.append(candidate.copy())
-		if random.random() <=args["p_change_move"]: 
+		if random.random() <=args["p_change_ampl"]: 
 			k = random.randint(0,len(candidate)-1)
 			if candidate[k].moveType == MoveType.ROTATE:
 				out[-1][k].amplitude = random.gauss(0,args["max_rotation_amplitude"])
@@ -297,6 +297,20 @@ def moveTypeMutation(random,candidates,args):
 				out[-1][k].moveType = MoveType.ROTATE
 				out[-1][k].amplitude = abs(candidate[k].amplitude)/args["max_deplacement_amplitude"]*180*random.choice([-1,1])
 	return out
+
+def newInst(random,candidates,args):
+	out = []
+	for candidate in candidates:
+		out.append(candidate.copy())
+		if random.random() <=args["p_new_inst"]: 
+			prob = random.random()
+			if prob <=0.5 :
+				k = Instruction(MoveType.ROTATE, random.gauss(0,args["max_rotation_amplitude"]))
+			else :
+				k = Instruction(MoveType.FORWARD, random.gauss(args["mean_forward_amplitude"],args["max_forward_amplitude"]))
+			out[-1].append(k)
+	return out
+
 ################# MAIN
 def main() :
 	listOfCommands = []
@@ -310,7 +324,7 @@ def main() :
 	evo = inspyred.ec.EvolutionaryComputation(random_generator)
 	
 	evo.selector = inspyred.ec.selectors.tournament_selection
-	evo.variator = [inspyred.ec.variators.n_point_crossover,moveTypeMutation]
+	evo.variator = [inspyred.ec.variators.n_point_crossover,moveTypeMutation,changeAmpl]
 	evo.replacer = inspyred.ec.replacers.plus_replacement
 	evo.terminator = inspyred.ec.terminators.evaluation_termination
 	
@@ -322,16 +336,20 @@ def main() :
 	 	maximize = False,
 		mutation_rate = 0.9,
 		crossover_rate = 0.2,
-	 	max_evaluations = 40000,
+	 	max_evaluations = 10000,
 		max_rotation_amplitude =10,
+		mean_forward_amplitude = 10,
+		max_forward_amplitude = 10,
 		max_deplacement_amplitude=5,
-		min_number_of_moves = 150,
-		max_number_of_moves = 150,
+		min_number_of_moves = 80,
+		max_number_of_moves = 80,
         weight_dist_objective = 1,
         weight_dist_traj = 0,
-        weight_dist_inter = 100,
-		weight_out_arena = 100,
-		weight_proximity_wall = 0
+        weight_dist_inter = 10000,
+		weight_out_arena = 10000,
+		weight_proximity_wall = 0,
+		p_change_move = 0.1,
+		p_change_ampl = 0.1,
 	)
     # Affichage des résultats
 	indiv = population[0]
